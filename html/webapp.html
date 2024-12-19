@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pac-Man Game</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      background-color: #222;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+    }
+
+    #game-container {
+      position: relative;
+    }
+
+    canvas {
+      border: 2px solid #fff;
+      background-color: black;
+    }
+  </style>
+</head>
+<body>
+  <div id="game-container">
+    <canvas id="gameCanvas" width="600" height="400"></canvas>
+  </div>
+  <script>
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
+
+    const pacMan = {
+      x: 50,
+      y: 50,
+      radius: 15,
+      speed: 2,
+      direction: "right",
+      mouthAngle: 0.2,
+      mouthClosing: true,
+      frameCounter: 0,
+      move() {
+        if (this.direction === "right") this.x += this.speed;
+        if (this.direction === "left") this.x -= this.speed;
+        if (this.direction === "up") this.y -= this.speed;
+        if (this.direction === "down") this.y += this.speed;
+
+        // Wrap-around logic
+        if (this.x > canvas.width + this.radius) this.x = -this.radius;
+        if (this.x < -this.radius) this.x = canvas.width + this.radius;
+        if (this.y > canvas.height + this.radius) this.y = -this.radius;
+        if (this.y < -this.radius) this.y = canvas.height + this.radius;
+      },
+      animateMouth() {
+        this.frameCounter++;
+        if (this.frameCounter % 10 === 0) {
+          if (this.mouthClosing) {
+            this.mouthAngle -= 0.05;
+            if (this.mouthAngle <= 0.05) this.mouthClosing = false;
+          } else {
+            this.mouthAngle += 0.05;
+            if (this.mouthAngle >= 0.2) this.mouthClosing = true;
+          }
+        }
+      },
+      draw() {
+        let startAngle, endAngle;
+        if (this.direction === "right") {
+          startAngle = this.mouthAngle * Math.PI;
+          endAngle = (2 - this.mouthAngle) * Math.PI;
+        } else if (this.direction === "left") {
+          startAngle = (1 + this.mouthAngle) * Math.PI;
+          endAngle = (1 - this.mouthAngle) * Math.PI;
+        } else if (this.direction === "up") {
+          startAngle = (1.5 + this.mouthAngle) * Math.PI;
+          endAngle = (1.5 - this.mouthAngle) * Math.PI;
+        } else if (this.direction === "down") {
+          startAngle = (0.5 + this.mouthAngle) * Math.PI;
+          endAngle = (0.5 - this.mouthAngle) * Math.PI;
+        }
+
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius, startAngle, endAngle);
+        ctx.lineTo(this.x, this.y);
+        ctx.fillStyle = "yellow";
+        ctx.fill();
+        ctx.closePath();
+      }
+    };
+
+    const pellets = [];
+    const pelletRadius = 5;
+    const pelletCount = 10;
+
+    const ghosts = [
+      { x: 200, y: 200, radius: 15, color: 'red', speed: 1, direction: "left" },
+      { x: 400, y: 100, radius: 15, color: 'blue', speed: 1, direction: "down" },
+      { x: 300, y: 300, radius: 15, color: 'green', speed: 1, direction: "up" },
+    ];
+
+    function createPellets() {
+      for (let i = 0; i < pelletCount; i++) {
+        const x = Math.random() * (canvas.width - 20) + 10;
+        const y = Math.random() * (canvas.height - 20) + 10;
+        pellets.push({ x, y });
+      }
+    }
+
+    function drawPellets() {
+      pellets.forEach(pellet => {
+        ctx.beginPath();
+        ctx.arc(pellet.x, pellet.y, pelletRadius, 0, Math.PI * 2);
+        ctx.fillStyle = "white";
+        ctx.fill();
+        ctx.closePath();
+      });
+    }
+
+    function detectCollisions() {
+      for (let i = 0; i < pellets.length; i++) {
+        const p = pellets[i];
+        const distance = Math.sqrt(Math.pow(p.x - pacMan.x, 2) + Math.pow(p.y - pacMan.y, 2));
+        if (distance < pacMan.radius + pelletRadius) {
+          pellets.splice(i, 1);
+          break;
+        }
+      }
+
+      for (const ghost of ghosts) {
+        const ghostDistance = Math.sqrt(Math.pow(ghost.x - pacMan.x, 2) + Math.pow(ghost.y - pacMan.y, 2));
+        if (ghostDistance < ghost.radius + pacMan.radius) {
+          alert("Game Over! Pac-Man was caught by a ghost!");
+          resetGame();
+          return;
+        }
+      }
+
+      if (pellets.length === 0) {
+        alert("You Win! All pellets collected!");
+        resetGame();
+      }
+    }
+
+    function drawGhost(ghost) {
+      const waveHeight = 4;
+      const waveCount = 5;
+
+      // Draw the rounded top of the ghost
+      ctx.beginPath();
+      ctx.arc(ghost.x, ghost.y - ghost.radius / 2, ghost.radius, Math.PI, 0, false);
+
+      // Draw the wavy bottom
+      let currentX = ghost.x - ghost.radius;
+      const step = (ghost.radius * 2) / waveCount;
+
+      for (let i = 0; i < waveCount; i++) {
+        const nextX = currentX + step;
+        const controlX = currentX + step / 2;
+        const controlY = ghost.y + (i % 2 === 0 ? waveHeight : -waveHeight);
+        ctx.quadraticCurveTo(controlX, controlY, nextX, ghost.y);
+        currentX = nextX;
+      }
+
+      ctx.lineTo(ghost.x + ghost.radius, ghost.y);
+      ctx.closePath();
+      ctx.fillStyle = ghost.color;
+      ctx.fill();
+
+      // Add eyes
+      const eyeRadius = ghost.radius / 4;
+      const pupilRadius = ghost.radius / 8;
+      const eyeOffsetX = ghost.radius / 3;
+      const eyeOffsetY = ghost.radius / 3;
+
+      // Left eye
+      ctx.beginPath();
+      ctx.arc(ghost.x - eyeOffsetX, ghost.y - ghost.radius / 2, eyeRadius, 0, Math.PI * 2);
+      ctx.fillStyle = "white";
+      ctx.fill();
+
+      // Right eye
+      ctx.beginPath();
+      ctx.arc(ghost.x + eyeOffsetX, ghost.y - ghost.radius / 2, eyeRadius, 0, Math.PI * 2);
+      ctx.fillStyle = "white";
+      ctx.fill();
+
+      // Pupils
+      ctx.beginPath();
+      ctx.arc(ghost.x - eyeOffsetX, ghost.y - ghost.radius / 2, pupilRadius, 0, Math.PI * 2);
+      ctx.fillStyle = "blue";
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.arc(ghost.x + eyeOffsetX, ghost.y - ghost.radius / 2, pupilRadius, 0, Math.PI * 2);
+      ctx.fillStyle = "blue";
+      ctx.fill();
+    }
+
+    function moveGhosts() {
+      ghosts.forEach(ghost => {
+        if (ghost.direction === "left") ghost.x -= ghost.speed;
+        if (ghost.direction === "right") ghost.x += ghost.speed;
+        if (ghost.direction === "up") ghost.y -= ghost.speed;
+        if (ghost.direction === "down") ghost.y += ghost.speed;
+
+        if (ghost.x > canvas.width + ghost.radius) ghost.x = -ghost.radius;
+        if (ghost.x < -ghost.radius) ghost.x = canvas.width + ghost.radius;
+        if (ghost.y > canvas.height + ghost.radius) ghost.y = -ghost.radius;
+        if (ghost.y < -ghost.radius) ghost.y = canvas.height + ghost.radius;
+
+        const directions = ["up", "down", "left", "right"];
+        if (Math.random() < 0.01) {
+          ghost.direction = directions[Math.floor(Math.random() * directions.length)];
+        }
+      });
+    }
+
+    function update() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      drawPellets();
+      pacMan.move();
+      pacMan.animateMouth();
+      pacMan.draw();
+      moveGhosts();
+
+      ghosts.forEach(drawGhost);
+      detectCollisions();
+
+      requestAnimationFrame(update);
+    }
+
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "ArrowRight") pacMan.direction = "right";
+      if (event.key === "ArrowLeft") pacMan.direction = "left";
+      if (event.key === "ArrowUp") pacMan.direction = "up";
+      if (event.key === "ArrowDown") pacMan.direction = "down";
+    });
+
+    function resetGame() {
+      pacMan.x = 50;
+      pacMan.y = 50;
+      pacMan.direction = "right";
+      pacMan.mouthAngle = 0.2;
+      pacMan.mouthClosing = true;
+      pellets.length = 0;
+      ghosts.forEach(ghost => {
+        ghost.x = Math.random() * canvas.width;
+        ghost.y = Math.random() * canvas.height;
+      });
+      createPellets();
+    }
+
+    createPellets();
+    update();
+  </script>
+</body>
+</html>
